@@ -1,0 +1,467 @@
+---
+title: "Educational Big Data"
+output: html_document
+date: "2025-04-21"
+---
+
+0.匯入資料
+```{r}
+library(readr)
+user_data <- read_csv("~/Desktop/IT/統計/Edu/user_data.csv")
+user_data$user_sn <- as.factor(user_data$user_sn)
+dp001_prac <- read_csv("~/Desktop/IT/統計/Edu/dp001_prac.csv")
+dp001_exam <- read_csv("~/Desktop/IT/統計/Edu/dp001_exam.csv")
+dp001_review <- read_csv("~/Desktop/IT/統計/Edu/dp001_review.csv")
+dp001_review_plus <- read_csv("~/Desktop/IT/統計/Edu/dp001_review_plus.csv")
+```
+
+第一步：將user_data、dp001_prac和dp001_review按user_sn合併
+```{r}
+data_raw <- merge(user_data, dp001_prac, by = "user_sn", all = TRUE)
+data_raw <- merge(data_raw, dp001_review, by = "user_sn", all = TRUE)
+```
+
+第二步：將data_raw與dp001_review_plus和dp001_exam按review_sn合併
+```{r}
+data1 <- merge(data_raw, dp001_review_plus, by = "review_sn", all = TRUE)
+data1 <- merge(data1, dp001_exam, by = "review_sn", all = TRUE)
+str(data1)
+
+colSums(is.na(data1))
+num_user <- length(unique(data1$user_sn))
+num_user
+
+library(dplyr)
+data1 <- data1 %>% distinct()
+data1 <- na.omit(data1)
+str(data1) ###資料數剩下149743筆
+```
+
+轉換資料型態
+```{r}
+data1$user_sn <- as.factor(data1$user_sn)
+data1$review_sn <- as.factor(data1$review_sn)
+data1$grade <- as.factor(data1$grade)
+data1$class <- as.factor(data1$class)
+data1$seat <- as.factor(data1$seat)
+data1$prac_sn <- as.factor(data1$prac_sn)
+data1$indicator_name.x <- as.factor(data1$indicator_name.x)
+data1$subject_name.y <- as.factor(data1$subject_name.y)
+data1$video_name <- as.factor(data1$video_name)
+data1$review_plus_sn <- as.factor(data1$review_plus_sn)
+data1$exam_sn <- as.factor(data1$exam_sn)
+data1$question_sn <- as.factor(data1$question_sn)
+data1$view_action <- as.factor(data1$view_action)
+data1$organization_id <- as.factor(data1$organization_id)
+str(data1)
+```
+
+
+用finish_rate分為三組
+Create a new variable "finish_level" based on the Finish_rate values
+```{r}
+data1$finish_level <- cut(data1$finish_rate, breaks = c(0, 50, 90, 100), 
+                          labels = c("low", "median", "high"))
+```
+
+Summarize the counts of each finish_level category
+```{r}
+table(data1$finish_level)
+```
+
+使用 cut() 函數將 Finish_rate 分成三個區間
+```{r}
+data1$finish_level2 <- cut(data1$finish_rate, breaks = c(0, 23, 73, 100), 
+                          labels = c("low", "median", "high"))
+```
+
+統計每個分類的筆數
+```{r}
+table(data1$finish_level2)
+```
+
+使用 cut() 函數將 Finish_rate 分成三個區間
+```{r}
+data1$finish_level3 <- cut(data1$finish_rate, breaks = c(0, 50, 99, 100), 
+                           labels = c("low", "median", "high"))
+```
+
+統計每個分類的筆數
+```{r}
+table(data1$finish_level3)
+str(data1$subject_name.x)
+str(data1)
+```
+
+檢查年級類別
+```{r}
+levels(data1$grade)
+levels(data1$organization_id)
+```
+
+計算每個學校的總人數（使用 unique user_sn）
+```{r}
+library(dplyr)
+school_distribution <- data1 %>%
+  select(user_sn, organization_id) %>%
+  unique() %>%
+  group_by(organization_id) %>%
+  summarise(
+    student_count = n(),
+    percentage = round(n() / length(unique(data1$organization_id)) * 100, 1)
+  )
+
+print(school_distribution)
+
+total_students <- sum(school_distribution$student_count)
+print(paste("總學生人數：", total_students))
+```
+
+計算不重複的影片數量（使用video_name）
+```{r}
+unique_videos <- length(unique(data1$video_name))
+unique_videos
+```
+
+計算總觀看次數（使用review_sn）
+```{r}
+total_views <- length(unique(data1$review_sn))
+total_views
+```
+
+計算每部影片的觀看次數
+```{r}
+views_per_video <- table(data1$video_name[!duplicated(data1$review_sn)])
+views_per_video
+```
+
+計算平均每部影片觀看次數
+```{r}
+avg_views_per_video <- total_views / unique_videos
+
+# 顯示結果
+cat("影片總數：", unique_videos, "部\n")
+cat("總觀看次數：", total_views, "次\n")
+cat("平均每部影片觀看：", round(avg_views_per_video, 2), "次\n")
+```
+
+顯示觀看次數分布的摘要統計
+```{r}
+summary_stats <- summary(as.numeric(views_per_video))
+print("各影片觀看次數的分布概況：")
+print(summary_stats)
+```
+
+找出觀看次數最多和最少的影片
+```{r}
+most_viewed <- names(sort(views_per_video, decreasing = TRUE)[1])
+least_viewed <- names(sort(views_per_video)[1])
+
+cat("\n觀看次數最多的影片：", most_viewed, "（", max(views_per_video), "次）\n")
+cat("觀看次數最少的影片：", least_viewed, "（", min(views_per_video), "次）\n")
+```
+
+了解影片操作行為##
+計算不重複的影片操作數量（使用view_action）
+```{r}
+unique_actions <- length(unique(data1$view_action))
+unique_actions
+```
+
+計算每個動作的次數
+```{r}
+action_counts <- table(data1$view_action)
+```
+
+轉換成數據框以便繪圖
+```{r}
+action_df <- data.frame(
+  action = names(action_counts),
+  count = as.numeric(action_counts)
+)
+
+library(ggplot2)
+
+custom_colors <- c(
+  "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEEAD",
+  "#D4A5A5", "#9B59B6", "#3498DB", "#E67E22", "#1ABC9C",
+  "#F1C40F", "#E74C3C", "#2ECC71", "#34495E", "#95A5A6",
+  "#16A085", "#8E44AD", "#2980B9", "#F39C12"
+)
+
+ggplot(action_df, aes(x = reorder(action, -count), y = count, fill = action)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = custom_colors) +
+  theme_minimal() +
+  labs(
+    title = "Frequency of Video Interaction Actions",
+    x = "Action Type",
+    y = "Frequency"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+print(action_counts)
+```
+
+
+創建數據框並排序
+```{r}
+action_data <- data.frame(
+  action = c("browse", "chkptend", "chkptstart", "continue", "dragleft", "dragright",
+             "dragstart", "end", "fuscreenoff", "fuscreenon", "normal", "note",
+             "paused", "play", "question", "review", "slowdown", "speedup"),
+  count = c(224859, 426419, 426012, 54324, 162490, 55091,
+            245691, 151362, 38177, 78971, 111780, 661,
+            1387512, 1466717, 100, 28869, 56255, 17826)
+)
+
+action_sorted <- action_data[order(action_data$count, decreasing = TRUE), ]
+```
+
+找出最高和最低的幾個值
+```{r}
+top_actions <- head(action_sorted, 3)
+bottom_actions <- tail(action_sorted, 3)
+```
+
+計算中等範圍的行為數量
+```{r}
+mid_range_count <- sum(action_sorted$count < 250000 & action_sorted$count > 50000)
+```
+
+生成報告
+```{r}
+cat("影片互動行為分析摘要：\n\n")
+cat("1. 最常見的行為：\n")
+cat(sprintf("   - 播放(play)行為最多，共%s次\n", format(top_actions$count[1], big.mark=",")))
+cat(sprintf("   - 暫停(paused)次之，共%s次\n", format(top_actions$count[2], big.mark=",")))
+cat(sprintf("   - 檢核點相關行為緊隨其後，檢核點作答結束(chkptend)與開始(chkptstart)次數相近，分別為%s次與%s次\n\n",
+            format(426419, big.mark=","), format(426012, big.mark=",")))
+
+cat("2. 中等頻率行為：\n")
+cat(sprintf("   - 共有%d種行為的發生次數介於50,000到250,000次之間\n", mid_range_count))
+cat("   - 包括拖曳開始(dragstart)、瀏覽(browse)、向左拖曳(dragleft)等行為\n\n")
+
+cat("3. 最少見的行為：\n")
+for(i in nrow(bottom_actions):1) {
+  cat(sprintf("   - %s：%s次\n", 
+              bottom_actions$action[i],
+              format(bottom_actions$count[i], big.mark=",")))
+}
+str(data1)
+```
+
+影片開始與結束時間
+載入需要的套件
+```{r}
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+```
+
+1. 數據處理：計算每日觀看開始次數
+```{r}
+daily_views <- data1 %>%
+  group_by(date = as.Date(start_time)) %>%
+  summarise(count = n())
+```
+
+2. 繪製折線圖
+```{r}
+ggplot(daily_views, aes(x = date, y = count)) +
+  geom_line(color = "darkblue", size = 1) +  # 設定線條為紅色
+  theme_minimal() +
+  labs(
+    title = "Daily Video Viewing Trends",
+    x = "Date",
+    y = "Frequency"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),  
+    axis.text.y = element_text(size = 10),  
+    axis.title = element_text(size = 12),   
+    plot.title = element_text(hjust = 0.5, size = 14),  
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20)  
+  ) +
+  scale_x_date(
+    date_breaks = "1 month",   
+    date_labels = "%m/%d"      
+  ) +
+  scale_y_continuous(
+    labels = scales::comma      
+  )
+```
+
+3. 輸出一些基本統計資訊
+```{r}
+summary_stats <- daily_views %>%
+  summarise(
+    Total_Views = sum(count),
+    Average_Daily_Views = mean(count),
+    Highest_Daily_Views = max(count),
+    Lowest_Daily_Views = min(count)
+  )
+
+print(summary_stats)
+```
+
+影片科目#
+檢查科目類別
+```{r}
+str(dp001_review)
+dp001_review$subject_name <- as.factor(dp001_review$subject_name)
+levels(dp001_review$subject_name)
+subject_counts <- table(dp001_review$subject_name)
+subject_counts
+```
+
+建立資料框
+```{r}
+subject_counts <- c(2, 5, 121, 37, 1, 2307, 718, 4, 4, 1, 1, 1, 2, 636, 102, 1, 52, 2)
+subject_names <- c("Traffic Safety", "Health and Physical Education", "Mandarin", "Mandarin 108", 
+                   "Teacher Training Mandarin", "Math", "Math 108", "Japanese", "Algorithm", 
+                   "Environmental Education", "Visual Arts", "Self-directed Learning", "Science", 
+                   "Science 108", "English 108", "Performing Arts", "Disaster Prevention", "Music"
+)
+
+subject_df <- data.frame(
+  action1 = subject_names,
+  count1 = subject_counts
+)
+
+subject_colors <- c(
+  "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEEAD",
+  "#D4A5A5", "#9B59B6", "#3498DB", "#E67E22", "#1ABC9C",
+  "#F1C40F", "#E74C3C", "#2ECC71", "#34495E", "#95A5A6",
+  "#16A085", "#8E44AD", "#2980B9", "#FFC300"
+)
+
+
+library(ggplot2)
+ggplot(subject_df, aes(x = reorder(action1, -count1), y = count1, fill = action1)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = subject_colors) +
+  theme_minimal() +
+  labs(
+    title = "The Frequency of Different Subject Vedio",
+    x = "Subject",
+    y = "Frequency"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+影片名稱
+```{r}
+dp001_review$video_name <- as.factor(dp001_review$video_name)
+levels(dp001_review$video_name)
+video_counts <- table(dp001_review$video_name)
+video_counts
+```
+
+
+用不同影片完成率的低中高50,99來看學生的數學成績是否有顯著差異？
+Filter the data for 'math' and '數學108' in subject_name.x
+```{r}
+filtered_data <- data1[data1$subject_name.x %in% c('數學', '數學108'), ]
+```
+
+Check the results
+```{r}
+str(filtered_data)
+head(filtered_data)
+
+INDAOV <- filtered_data[ ,c('user_sn','subject_name.x','finish_level3','math_score')]
+str(INDAOV)
+summary(INDAOV)
+firstANOVA <- na.omit(INDAOV)
+summary(firstANOVA)
+str(firstANOVA)
+library(car)
+leveneTest(math_score~finish_level3, data=firstANOVA)
+INDAOV.op <- aov(math_score ~finish_level3, data=firstANOVA )
+summary(INDAOV.op)
+```
+
+```{r}
+library(car)
+library(sandwich)
+library(RcmdrMisc)
+with(firstANOVA, plotMeans(math_score, finish_level3, main='Plot of Means',
+                          xlab='video finish level', ylab='math score', error.bars='se'))
+library(agricolae)
+TukeyHSD(INDAOV.op)
+sch <- scheffe.test(INDAOV.op, 'finish_level3', group=F)
+sch$comparison
+```
+
+dp002
+```{r}
+library(readr)
+dp002_exam <- read_csv("~/Desktop/IT/統計/Edu/dp002_exam.csv")
+str(dp002_exam)
+```
+
+```{r}
+dp002_exam$object_type <- as.factor(dp002_exam$object_type)
+levels(dp002_exam$object_type)
+object_type_counts <- table(dp002_exam$object_type)
+object_type_counts
+
+dp002_exam$user_sn <- as.factor(dp002_exam$user_sn)
+dp002_exam$sn <- as.factor(dp002_exam$sn)
+num_data2 <- length(unique(dp002_exam$user_sn))
+num_data2
+```
+
+Test把dp002和dp001合在一起
+```{r}
+data_R <- merge(dp002_exam, user_data, by = "user_sn", all = TRUE)
+colSums(is.na(data_R))
+num_user1 <- length(unique(data_R$user_sn))
+num_user1
+```
+
+dp003_word
+```{r}
+user_data$user_sn <- as.factor(user_data$user_sn)
+dp003_word <- read_csv("~/Desktop/IT/統計/Edu/dp003_word.csv")
+dp003_word$user_sn <- as.factor(dp003_word$user_sn)
+```
+
+dp003_math
+```{r}
+dp003_math <- read_csv("~/Desktop/IT/統計/Edu/dp003_math.csv")
+str(dp003_math)
+dp003_math$user_sn <- as.factor(dp003_math$user_sn)
+```
+
+Test將dp001.2.3的user_sn合在一起，看共同學生有幾位
+```{r}
+data_t1 <- merge(user_data, dp002_exam, by = "user_sn", all = F)
+data_t2 <- merge(data_t1, dp003_word, by = "user_sn", all = F)
+data_t3 <- merge(data_t2, dp003_math, by = "user_sn", all = F)
+data_t4 <- merge(user_data, dp003_math, by = "user_sn", all = F)
+data_t5 <- merge(dp002_exam, dp003_word, by = "user_sn", all = F)
+
+d5_user_num <- length(unique(data_t5$user_sn))
+d5_user_num
+
+
+d4_user_num <- length(unique(data_t4$user_sn))
+d4_user_num
+
+d12_user_num <- length(unique(data_t1$user_sn))
+d12_user_num
+
+d123w_user_num <- length(unique(data_t2$user_sn))
+d123w_user_num
+
+total_user_num <- length(unique(data_t3$user_sn))
+total_user_num
+```
